@@ -13,6 +13,8 @@ let playStartTime = -1;
 let playStartTimeInScript = -1;
 let playScriptTimeout = -1;
 
+let scaleV = 1.0;
+
 // Websocket
 let socket = new W3CWebSocket("ws://localhost:12345");
 
@@ -154,24 +156,45 @@ setInterval(() => {
     if (nextPosition !== null) {
         let duration = nextPosition.time - currentScriptTime;
 
-        let messageId = getNextMessageId();
-        let linearCmdMessage = [
+        //let messageId = getNextMessageId();
+        // let linearCmdMessage = [
+        //     {
+        //         "LinearCmd": {
+        //             "Id": messageId,
+        //             "DeviceIndex": 0,
+        //             "Vectors": [
+        //                 {
+        //                     "Index": 0,
+        //                     "Duration": duration,
+        //                     "Position": nextPosition.position
+        //                 }
+        //             ]
+        //         }
+        //     }
+        // ]
+        //sendSocketMessage(linearCmdMessage, messageId);
+        speedV = (1-nextPosition.position )*scaleV;
+        console.log(speedV)
+
+        let messageIdV = getNextMessageId();
+        let linearCmdMessageV = [
             {
-                "LinearCmd": {
-                    "Id": messageId,
+                "VibrateCmd": {
+                    "Id": messageIdV,
                     "DeviceIndex": 0,
-                    "Vectors": [
+                    "Speeds": [
                         {
                             "Index": 0,
-                            "Duration": duration,
-                            "Position": nextPosition.position
+                            "Speed": speedV
                         }
                     ]
                 }
             }
         ]
-
-        sendSocketMessage(linearCmdMessage, messageId);
+        //console.log(linearCmdMessageV);
+        sendSocketMessage(linearCmdMessageV, messageIdV);
+        new Promise(resolve => setTimeout(resolve, duration));
+        //sleep(duration);
     }
 
     lastTimestamp = currentTimestamp;
@@ -179,6 +202,26 @@ setInterval(() => {
 
 // Server
 let app = express();
+var bodyParser = require('body-parser');
+
+ app.use(bodyParser.urlencoded({
+  extended: true,
+  limit: '50mb',
+  parameterLimit: 100000
+  }))
+
+ app.use(bodyParser.json({
+  limit: '50mb',
+  parameterLimit: 100000
+ }))
+ app.use(bodyParser.raw({
+    limit: '50mb',
+    parameterLimit: 100000
+   }))
+   app.use(bodyParser.text({
+    limit: '50mb',
+    parameterLimit: 100000
+   }))
 app.listen(3000);
 
 // We use text instead of JSON, as the AS2 version can't post JSON
@@ -196,8 +239,9 @@ app.post("/prepareScript", express.text(), (req, res) => {
         let bodyIndex = body.indexOf("body=");
         let jsonString = body.substring(bodyIndex + "body=".length, body.indexOf("&"));
         preparedPositions = JSON.parse(jsonString);
+        
     }
-
+    //console.log(preparedPositions);
     res.send({});
 });
 
@@ -213,7 +257,9 @@ app.get("/playScript", (req, res) => {
     }
 
     playStartTime = Math.floor(performanceNow());
+    console.log("req.query.time" + req.query.time)
     playStartTimeInScript = parseInt(req.query.time);
+    console.log("playStartTimeInScript " + playStartTimeInScript);
     isPlayingScript = true;
 
     clearTimeout(playScriptTimeout);
